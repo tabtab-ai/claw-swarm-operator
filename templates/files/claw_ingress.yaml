@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  labels:
+    tabtabai.com/tabclaw: "true"
+    tabtabai.com/tabclaw-name: {{ .sts_name }}
+  name: {{ .sts_name }}
+  namespace: {{ .sts_namespace}}
+spec:
+  ingressClassName: {{ .ingress_name }}
+  rules:
+  - host: {{ .host_prefix }}-{{ .sts_name }}.{{ .domain }}
+    http:
+      paths:
+      - backend:
+          service:
+            name: {{ .sts_name }}
+            port:
+              number: 18789
+        path: /
+        pathType: ImplementationSpecific
+  {{- if .tls_secret }}
+  tls:
+  - hosts:
+    - {{ .host_prefix }}-{{ .sts_name }}.{{ .domain }}
+    secretName: {{ .tls_secret }}
+  {{- end }}

@@ -1,0 +1,51 @@
+version: "2"
+
+run:
+  allow-parallel-runners: true
+  timeout: 10m
+
+linters:
+  default: none
+  enable:
+    - copyloopvar
+    - ginkgolinter
+    - govet
+    - ineffassign
+    - mirror
+    - staticcheck
+    - unused
+    - whitespace
+  settings:
+    revive:
+      rules:
+        - name: comment-spacings
+        - name: import-shadowing
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - lll
+        path: api/*
+      - linters:
+          - dupl
+          - lll
+        path: internal/*
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+  - gci
+  settings:
+    gci:
+      sections:
+      - standard
+      - default
+      - prefix(github.com/tabtab-ai/claw-swarm-operator) # 你的项目路径
+      - blank
+      - dot
+      custom-order: true
+
+issues:
+  max-same-issues: 5

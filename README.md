@@ -1,93 +1,182 @@
+**[English](README.md) | [中文](README_zh.md)**
+
+<p align="center">
+  <a href="https://github.com/tabtab-ai/claw-swarm-operator/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
+  <!--<a href="https://github.com/tabtab-ai/claw-swarm-operator/actions/workflows/docker-publish.yml"><img src="https://img.shields.io/github/actions/workflow/status/tabtab-ai/claw-swarm-operator/docker-publish.yml?branch=main&label=build" alt="Build Status"></a>-->
+  <a href="https://hub.docker.com/r/tabtabai/claw-swarm-operator"><img src="https://img.shields.io/docker/pulls/tabtabai/claw-swarm-operator.svg" alt="Docker Pulls"></a>
+  <img src="https://img.shields.io/badge/Go-1.24-00ADD8.svg" alt="Go Version">
+  <img src="https://img.shields.io/badge/Kubernetes-%E2%89%A51.23-326CE5.svg" alt="Kubernetes">
+</p>
+
 # Claw Swarm Operator
 
+A Kubernetes operator that keeps a warm pool of [OpenClaw](https://github.com/openclaw/openclaw) instances ready to use.
 
+OpenClaw instances take time to initialize. This operator pre-creates a configurable number of idle instances so external services can allocate one instantly — no cold-start wait. When an instance is freed, the pool is automatically replenished.
 
-## Getting started
+## Features
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+- **Zero cold-start allocation** — instances are pre-warmed and ready before you need them
+- **Full lifecycle management** — each instance's StatefulSet, Service, Ingress, and Secret are created and cleaned up automatically
+- **Pause / resume** — idle instances can be suspended to save resources, with PVC data retained
+- **Scheduled pause** — set a time annotation and the operator auto-pauses the instance
+- **Rolling image updates** — update `--runtime-image` and the operator rolls it out to idle instances without touching active ones
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+## Instance Lifecycle
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.botnow.cn/agentic/claw-swarm-operator.git
-git branch -M main
-git push -uf origin main
+  (operator pre-creates)
+          │
+          ▼
+        idle ────allocate────► occupied ────free────► [deleted]
+          ▲          │             │   ▲
+          │          │           pause │
+    (new idle      (new idle       │  resume
+     created)      created to      ▼   │
+                   refill pool)  paused
 ```
 
-## Integrate with your tools
+## Quick Start
 
-- [ ] [Set up project integrations](https://gitlab.botnow.cn/agentic/claw-swarm-operator/-/settings/integrations)
+**Prerequisites:** Kubernetes ≥ 1.23, Helm ≥ 3.x, and an Ingress controller installed in your cluster.
 
-## Collaborate with your team
+> **Note:** If you don't already have an Ingress controller, you can install [Kong Ingress Controller](https://docs.konghq.com/kubernetes-ingress-controller/latest/). This step is optional — skip it if your cluster already has an Ingress controller.
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+```bash
+helm install claw-swarm-operator charts/claw-swarm-operator \
+  --namespace tabclaw \
+  --create-namespace \
+  --set operatorConfig.ingressDomain=claw.example.com \
+  --set operatorConfig.ingressClassName=kong \
+  --set operatorConfig.poolSize=5
 
-## Test and Deploy
+kubectl get pods -n tabclaw
+```
 
-Use the built-in continuous integration in GitLab.
+**Create a StatefulSet to seed the pool:**
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+```yaml
+# seed.yaml
 
-***
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    tabtabai.com/tabclaw-init: ""
+    tabtabai.com/tabclaw: ""
+    tabtabai.com/tabclaw-occupied: ""
+  name: start
+  namespace: tabclaw
+spec:
+  replicas: 0
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      tabtabai.com/tabclaw-init: ""
+  template:
+    metadata:
+      labels:
+        tabtabai.com/tabclaw-init: ""
+    spec:
+      containers:
+      - image: nginx
+        imagePullPolicy: Always
+        name: nginx
+```
 
-# Editing this README
+```bash
+kubectl apply -f seed.yaml
+```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+**Allocate an instance:**
+```bash
+kubectl label statefulset <name> tabtabai.com/tabclaw-occupied=true -n tabclaw
+```
 
-## Suggestions for a good README
+**Free an instance:**
+```bash
+kubectl label statefulset <name> tabtabai.com/tabclaw-occupied- -n tabclaw
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## How It Works
 
-## Name
-Choose a self-explaining name for your project.
+Each instance consists of four Kubernetes resources owned by a StatefulSet:
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+| Resource | Details |
+|----------|---------|
+| **StatefulSet** | One pod running the OpenClaw gateway |
+| **Service** | ClusterIP, ports 18789 (gateway) + 18790 (aux) |
+| **Ingress** | `{host-prefix}-{name}.{domain}` |
+| **Secret** | Per-instance gateway token (UUIDv4) |
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+When an instance is paused (`spec.replicas=0`), the pod stops, the PVC is retained, and the Ingress is switched to a protected class to block external traffic. On resume, everything is restored.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+## Documentation
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+- [Configuration Reference](docs/configuration.md) — all Helm chart values and operator flags explained
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+**Labels:**
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+| Label | Purpose |
+|-------|---------|
+| `tabtabai.com/tabclaw=true` | Marks a StatefulSet as operator-managed |
+| `tabtabai.com/tabclaw-name=<name>` | Instance name |
+| `tabtabai.com/tabclaw-occupied=true` | Instance is allocated; absence = idle |
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+**Annotations:**
+
+| Annotation | Purpose |
+|-----------|---------|
+| `tabtab.app.scheduled.deletion.time` | RFC3339 time to auto-pause the instance |
 
 ## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Contributions are welcome! Here's how to get started:
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+**Prerequisites:** Go 1.24+, Docker, a local Kubernetes cluster (e.g. [kind](https://kind.sigs.k8s.io/) or [minikube](https://minikube.sigs.k8s.io/)).
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+```bash
+git clone https://github.com/tabtab-ai/claw-swarm-operator.git
+cd claw-swarm-operator
+
+# Modify code
+
+# Run tests
+make test
+
+# Build the operator binary
+go build -o bin/manager ./cmd/main.go
+
+# Run locally against your current kubeconfig cluster
+bin/manager \
+  --ingress-domain=claw.example.com \
+  --ingress-class-name=kong \
+  --pool-size=2
+```
+
+Please open an issue before submitting a large PR so we can discuss the approach first. Bug fixes and small improvements can go straight to a PR.
+
+## Troubleshooting
+
+**Instances not being created after startup**
+
+Pool fill is asynchronous. Check operator logs:
+```bash
+kubectl logs -l app.kubernetes.io/name=claw-swarm-operator -n <namespace> -f
+```
+
+**`unable to load in-cluster configuration`**
+
+Set `KUBECONFIG` or ensure `~/.kube/config` exists when running outside the cluster.
+
+**PVC not deleted after freeing an instance**
+
+`persistentVolumeClaimRetentionPolicy.whenDeleted: Delete` requires Kubernetes ≥ 1.23.
+
+**Instance pod stuck in `Pending`**
+
+Check node resources and whether the StorageClass has available capacity.
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+[MIT](LICENSE)

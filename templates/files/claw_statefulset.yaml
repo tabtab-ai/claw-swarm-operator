@@ -1,0 +1,153 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .sts_name }}
+  namespace: {{ .sts_namespace }}
+  labels:
+    tabtabai.com/tabclaw: "true" 
+    tabtabai.com/tabclaw-name: {{ .sts_name }}
+  annotations:
+    claw_webui_url: "https://{{ .host_prefix }}-{{ .sts_name }}.{{ .domain }}"
+    claw_wss_url: "wss://{{ .host_prefix }}-{{ .sts_name }}.{{ .domain }}/overview"
+spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Delete
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      tabtabai.com/tabclaw: "true"
+      tabtabai.com/tabclaw-name: {{ .sts_name }}
+  serviceName: {{ .sts_name }}
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        tabtabai.com/tabclaw: "true"
+        tabtabai.com/tabclaw-name: {{ .sts_name }}
+    spec:
+    {{- if .image_pull_secrets }}
+      imagePullSecrets:
+    {{- range .image_pull_secrets }}
+      - name: {{ . }}
+    {{- end }}
+    {{- end }}
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      {{- if .node_selector }}
+      nodeSelector:
+        {{- range $k, $v := .node_selector }}
+        {{ $k }}: {{ $v }}
+        {{- end}}
+      {{- end }}
+      initContainers:
+      - name: init
+        image: registry.botnow.cn/agentic/claw-init:v0.0.1-alpha
+        volumeMounts:
+        - name: openclaw-data
+          mountPath: /empty/.openclaw
+        command:
+        - /bin/sh
+        - -c
+        args:
+        - |
+          chown -R 1000:1000 /empty/.openclaw
+          mkdir -p /empty/.openclaw/bin
+          cp /usr/local/bin/jq /empty/.openclaw/bin
+          cp /usr/local/bin/auto_approve.sh /empty/.openclaw/bin
+      - name: init-tabclaw
+        image: {{ .image }}
+        imagePullPolicy: IfNotPresent
+        {{- if .env }}
+        env:
+        {{- range $key, $value := .env }}
+        - name: '{{ $key }}'
+          value: '{{ $value }}'
+        {{- end }}
+        {{- end }}
+        command:
+        - "/bin/sh"
+        - "-c"
+        args:
+        - |
+          set -e
+          CONFIG_FILE="/home/node/.openclaw/openclaw.json"
+          echo "Checking for configuration file: $CONFIG_FILE"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "init openclaw ..."
+            openclaw onboard --non-interactive \
+            --accept-risk \
+            --mode local \
+            --gateway-port {{ .gateway_port }} \
+            --gateway-auth {{ .gateway_auth }} \
+            --gateway-token {{ .gateway_token }} \
+            --gateway-bind ${OPENCLAW_GATEWAY_BIND} \
+            --install-daemon \
+            --daemon-runtime node \
+            --skip-skills \
+            --tailscale off \
+            --skip-search \
+            --json  || echo "config openclaw allowed origins ..."
+
+            openclaw config set gateway.controlUi.allowedOrigins '["http://localhost:18789","http://127.0.0.1:18789","https://{{ .host_prefix }}-{{ .sts_name }}.{{ .domain }}"]'
+          else
+            echo "Config exists, skipping."
+          fi
+        volumeMounts:
+        - name: openclaw-data
+          mountPath: /home/node/.openclaw
+      containers:
+      - name: tabclaw
+        image: {{ .image }}
+        imagePullPolicy: IfNotPresent
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - "nohup /home/node/.openclaw/bin/auto_approve.sh &> /dev/null &"
+        env:
+        - name: PATH
+          value: "/home/node/.openclaw/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        {{- if .env }}
+        {{- range $key, $value := .env }}
+        - name: '{{ $key }}'
+          value: '{{ $value }}'
+        {{- end }}
+        {{- end }}
+        command:
+        - node
+        args:
+        - dist/index.js
+        - gateway
+        - --bind
+        - lan
+        - --port
+        - "18789"
+        ports:
+        - containerPort: 18789
+          name: port1
+        - containerPort: 18790
+          name: port2
+        volumeMounts:
+        - name: openclaw-data
+          mountPath: /home/node/.openclaw
+  {{- if and .storage .storage_size }}
+  volumeClaimTemplates:
+  - metadata:
+      name: openclaw-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "{{ .storage }}"
+      resources:
+        requests:
+          storage: {{ .storage_size }}
+  {{- else }}
+      volumes:
+      - name: openclaw-data
+        emptyDir:
+          sizeLimit: 2Gi
+  {{- end }}
