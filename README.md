@@ -42,6 +42,29 @@ OpenClaw instances take time to initialize. This operator pre-creates a configur
 
 > **Note:** If you don't already have an Ingress controller, you can install [Kong Ingress Controller](https://docs.konghq.com/kubernetes-ingress-controller/latest/). This step is optional — skip it if your cluster already has an Ingress controller.
 
+**Install from OCI registry (recommended):**
+
+> The following three parameters control how OpenClaw instances are exposed — adjust them to match your cluster:
+>
+> | Parameter | Description |
+> |-----------|-------------|
+> | `operatorConfig.ingressDomain` | Base domain for OpenClaw instance ingress rules (e.g. `claw.example.com`) |
+> | `operatorConfig.ingressClassName` | Ingress class name matching your cluster's ingress controller (e.g. `kong`, `nginx`) |
+> | `operatorConfig.poolSize` | Number of idle instances to keep pre-warmed in the pool |
+
+```bash
+helm install claw-swarm-operator oci://registry-1.docker.io/tabtabai/claw-swarm-operator-chart \
+  --namespace tabclaw \
+  --create-namespace \
+  --set operatorConfig.ingressDomain=claw.example.com \
+  --set operatorConfig.ingressClassName=kong \
+  --set operatorConfig.poolSize=1
+
+kubectl get pods -n tabclaw
+```
+
+**Install from local source:**
+
 ```bash
 helm install claw-swarm-operator charts/claw-swarm-operator \
   --namespace tabclaw \
