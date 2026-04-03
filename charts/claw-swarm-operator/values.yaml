@@ -161,6 +161,10 @@ tolerations: []
 
 affinity: {}
 
+seed:
+  # Automatically create a seed StatefulSet to trigger pool initialization on install.
+  enabled: true
+
 operatorConfig:
   runtimeImage: "ghcr.io/openclaw/openclaw:latest"
   storageClass: "standard"

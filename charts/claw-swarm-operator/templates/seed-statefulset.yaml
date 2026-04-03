@@ -1,0 +1,26 @@
+{{- if .Values.seed.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: start
+  namespace: {{ .Release.Namespace }}
+  labels:
+    tabtabai.com/tabclaw-init: ""
+    tabtabai.com/tabclaw: ""
+    tabtabai.com/tabclaw-occupied: ""
+spec:
+  replicas: 0
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      tabtabai.com/tabclaw-init: ""
+  template:
+    metadata:
+      labels:
+        tabtabai.com/tabclaw-init: ""
+    spec:
+      containers:
+      - image: nginx
+        imagePullPolicy: Always
+        name: nginx
+{{- end }}
