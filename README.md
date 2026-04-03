@@ -44,13 +44,14 @@ OpenClaw instances take time to initialize. This operator pre-creates a configur
 
 **Install from OCI registry (recommended):**
 
-> The following three parameters control how OpenClaw instances are exposed — adjust them to match your cluster:
+> The following parameters control how OpenClaw instances are exposed and provisioned — adjust them to match your cluster:
 >
-> | Parameter | Description |
-> |-----------|-------------|
-> | `operatorConfig.ingressDomain` | Base domain for OpenClaw instance ingress rules (e.g. `claw.example.com`) |
-> | `operatorConfig.ingressClassName` | Ingress class name matching your cluster's ingress controller (e.g. `kong`, `nginx`) |
-> | `operatorConfig.poolSize` | Number of idle instances to keep pre-warmed in the pool |
+> | Parameter | Required | Description |
+> |-----------|----------|-------------|
+> | `operatorConfig.ingressDomain` | Yes | Base domain for OpenClaw instance ingress rules (e.g. `claw.example.com`) |
+> | `operatorConfig.ingressClassName` | Yes | Ingress class name matching your cluster's ingress controller (e.g. `kong`, `nginx`) |
+> | `operatorConfig.poolSize` | Yes | Number of idle instances to keep pre-warmed in the pool |
+> | `operatorConfig.storageClassName` | **Yes** | StorageClass used to provision PVCs for each instance (e.g. `standard`, `gp2`). **Must be set explicitly — no default is assumed.** |
 
 ```bash
 helm install claw-swarm-operator oci://registry-1.docker.io/tabtabai/claw-swarm-operator-chart \
@@ -58,7 +59,8 @@ helm install claw-swarm-operator oci://registry-1.docker.io/tabtabai/claw-swarm-
   --create-namespace \
   --set operatorConfig.ingressDomain=claw.example.com \
   --set operatorConfig.ingressClassName=kong \
-  --set operatorConfig.poolSize=1
+  --set operatorConfig.poolSize=1 \
+  --set operatorConfig.storageClassName=standard
 
 kubectl get pods -n tabclaw
 ```
@@ -71,7 +73,8 @@ helm install claw-swarm-operator charts/claw-swarm-operator \
   --create-namespace \
   --set operatorConfig.ingressDomain=claw.example.com \
   --set operatorConfig.ingressClassName=kong \
-  --set operatorConfig.poolSize=5
+  --set operatorConfig.poolSize=5 \
+  --set operatorConfig.storageClassName=standard
 
 kubectl get pods -n tabclaw
 ```
