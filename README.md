@@ -60,7 +60,7 @@ helm install claw-swarm-operator oci://registry-1.docker.io/tabtabai/claw-swarm-
   --set operatorConfig.ingressDomain=claw.example.com \
   --set operatorConfig.ingressClassName=kong \
   --set operatorConfig.poolSize=1 \
-  --set operatorConfig.storageClass=standard  # omit to use emptyDir (no persistence)
+
 
 kubectl get pods -n tabclaw
 ```
@@ -76,7 +76,7 @@ helm install claw-swarm-operator charts/claw-swarm-operator \
   --set operatorConfig.ingressDomain=claw.example.com \
   --set operatorConfig.ingressClassName=kong \
   --set operatorConfig.poolSize=5 \
-  --set operatorConfig.storageClass=standard  # omit to use emptyDir (no persistence)
+
 
 kubectl get pods -n tabclaw
 ```
