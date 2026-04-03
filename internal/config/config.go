@@ -78,7 +78,6 @@ type Config struct {
 
 var (
 	ErrMissingRuntimeImage      = errors.New("config: RuntimeImage is required")
-	ErrMissingStorageClass      = errors.New("config: StorageClass is required")
 	ErrMissingIngressDomain     = errors.New("config: IngressDomain is required")
 	ErrMissingIngressHostPrefix = errors.New("config: IngressHostPrefix is required")
 	ErrMissingIngressClassName  = errors.New("config: IngressClassName is required")
@@ -88,7 +87,7 @@ var (
 func DefaultConfig() Config {
 	return Config{
 		RuntimeImage:      "ghcr.io/openclaw/openclaw:latest",
-		StorageClass:      "standard",
+		StorageClass:      "",
 		IngressDomain:     "",
 		IngressHostPrefix: "claw",
 		WatchNamespace:    "default",
@@ -121,9 +120,6 @@ func DefaultConfig() Config {
 func (c *Config) Validate() error {
 	if c.RuntimeImage == "" {
 		return ErrMissingRuntimeImage
-	}
-	if c.StorageClass == "" {
-		return ErrMissingStorageClass
 	}
 	if c.IngressDomain == "" {
 		return ErrMissingIngressDomain

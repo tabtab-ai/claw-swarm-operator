@@ -167,7 +167,7 @@ seed:
 
 operatorConfig:
   runtimeImage: "ghcr.io/openclaw/openclaw:latest"
-  storageClass: "standard"
+  storageClass: ""
   ingressDomain: "example.com"
   ingressHostPrefix: "claw"
   ingressClassName: "nginx-ingress"
